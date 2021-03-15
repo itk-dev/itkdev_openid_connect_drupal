@@ -187,7 +187,7 @@ class AuthenticationController extends ControllerBase {
     return Url::fromRoute(
       $name,
       $parameters,
-      $options,
+      $options
     )
       // Prevent bubble error. @todo documentation!
       ->toString(TRUE)->getGeneratedUrl();
