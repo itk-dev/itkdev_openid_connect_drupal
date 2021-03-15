@@ -49,3 +49,13 @@ To authenticate using one of the defined authenticators, the user must be sent
 to `/itkdev_openid_connect_drupal/authenticate/«key»`, where `«key»` is one of
 the authenticators defined in config (i.e. `generic` or `userid` in the example
 above).
+
+## Development
+
+### Coding standards
+
+```sh
+composer install
+composer coding-standards-check
+composer coding-standards-apply
+```

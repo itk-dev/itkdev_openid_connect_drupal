@@ -12,7 +12,14 @@
     "require": {
         "itk-dev/openid-connect": "^1.0"
     },
+    "require-dev": {
+        "drupal/coder": "^8.3",
+        "dealerdirect/phpcodesniffer-composer-installer": "^0.7.1"
+    },
     "scripts": {
+        "post-install-cmd": [
+            "ln -sf ../../scripts/git/hooks/pre-commit .git/hooks/pre-commit"
+        ],
         "coding-standards-check/phpcs": [
             "vendor/bin/phpcs --standard=phpcs.xml.dist"
         ],
