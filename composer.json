@@ -1,0 +1,11 @@
+{
+    "name": "itk-dev/itkdev_openid_connect_drupal",
+    "description": "OpenID Connect module",
+    "type": "custom-module",
+    "authors": [
+        {
+            "name": "Mikkel Ricky",
+            "email": "rimi@aarhus.dk"
+        }
+    ]
+}
