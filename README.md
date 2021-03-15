@@ -13,6 +13,11 @@ vendor/bin/drush pm:enable itkdev_openid_connect_drupal
 
 ```php
 $config['itkdev_openid_connect_drupal']['authenticators']['generic'] = [
+  // Optional name.
+  'name' => 'Azure B2C',
+  // Optional. Default: FALSE
+  'show_on_login_form' => TRUE,
+
   // Required OpenID Connect Discovery url (cf. https://swagger.io/docs/specification/authentication/openid-connect-discovery/)
   'openid_connect_discovery_url' => …,
   // Required client id.
@@ -49,6 +54,12 @@ To authenticate using one of the defined authenticators, the user must be sent
 to `/itkdev_openid_connect_drupal/authenticate/«key»`, where `«key»` is one of
 the authenticators defined in config (i.e. `generic` or `userid` in the example
 above).
+
+Generate the authentication url with code like
+
+```php
+Url::fromRoute('itkdev_openid_connect_drupal.authenticate', ['key' => $key])
+```
 
 ## Development
 

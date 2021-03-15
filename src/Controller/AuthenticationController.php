@@ -6,6 +6,7 @@ use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
+use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\user\Entity\User;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
 use Laminas\Diactoros\Response\RedirectResponse;
@@ -18,6 +19,13 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  * Authentication controller.
  */
 class AuthenticationController extends ControllerBase {
+  /**
+   * The config helper.
+   *
+   * @var \Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper
+   */
+  private $configHelper;
+
   /**
    * The file system.
    *
@@ -35,7 +43,8 @@ class AuthenticationController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public function __construct(FileSystemInterface $fileSystem, RequestStack $requestStack) {
+  public function __construct(ConfigHelper $configHelper, FileSystemInterface $fileSystem, RequestStack $requestStack) {
+    $this->configHelper = $configHelper;
     $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
   }
@@ -45,6 +54,7 @@ class AuthenticationController extends ControllerBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
+      $container->get(ConfigHelper::class),
       $container->get('file_system'),
       $container->get('request_stack')
     );
@@ -216,14 +226,7 @@ class AuthenticationController extends ControllerBase {
    * Get options.
    */
   private function getOptions(string $key): array {
-    $config = \Drupal::config('itkdev_openid_connect_drupal');
-    $options = $config->get('authenticators.' . $key);
-
-    if (empty($options)) {
-      throw new \InvalidArgumentException(sprintf('Invalid authenticator: %s', $key));
-    }
-
-    return $options;
+    return $this->configHelper->getAuthenticator($key);
   }
 
 }
