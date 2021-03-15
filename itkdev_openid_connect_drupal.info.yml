@@ -1,0 +1,6 @@
+name: OpenID Connect
+description: OpenID Connect
+package: Custom
+
+type: module
+core_version_requirement: ^8.8 || ^9

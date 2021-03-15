@@ -1,11 +1,29 @@
 {
     "name": "itk-dev/itkdev_openid_connect_drupal",
     "description": "OpenID Connect module",
-    "type": "custom-module",
+    "type": "drupal-module",
+    "license": "MIT",
     "authors": [
         {
             "name": "Mikkel Ricky",
             "email": "rimi@aarhus.dk"
         }
-    ]
+    ],
+    "require": {
+        "itk-dev/openid-connect": "^1.0"
+    },
+    "scripts": {
+        "coding-standards-check/phpcs": [
+            "vendor/bin/phpcs --standard=phpcs.xml.dist"
+        ],
+        "coding-standards-check": [
+            "@coding-standards-check/phpcs"
+        ],
+        "coding-standards-apply/phpcs": [
+            "vendor/bin/phpcbf --standard=phpcs.xml.dist"
+        ],
+        "coding-standards-apply": [
+            "@coding-standards-apply/phpcs"
+        ]
+    }
 }
