@@ -113,12 +113,7 @@ class AuthenticationController extends ControllerBase {
     // @see https://tools.ietf.org/html/rfc7519
     $idToken = $request->query->get('id_token');
     [$jose, $payload, $signature] = array_map('base64_decode', explode('.', $idToken));
-    try {
-      $payload = json_decode($payload, TRUE, 512, JSON_THROW_ON_ERROR);
-    }
-    catch (\JsonException $jsonException) {
-      throw new BadRequestHttpException('Invalid payload');
-    }
+    $payload = json_decode($payload, TRUE);
 
     if (!isset($payload['upn'])) {
       throw new BadRequestHttpException();

@@ -10,6 +10,7 @@
         }
     ],
     "require": {
+        "php": "^7.2",
         "itk-dev/openid-connect": "^1.0"
     },
     "require-dev": {
