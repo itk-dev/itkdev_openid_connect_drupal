@@ -1,8 +1,8 @@
 services:
   Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper:
-    class: Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper
     arguments: ['@config.factory']
 
+  Drupal\itkdev_openid_connect_drupal\Helper\UserHelper: ~
+
   Drupal\itkdev_openid_connect_drupal\Helper\FormHelper:
-    class: Drupal\itkdev_openid_connect_drupal\Helper\FormHelper
     arguments: ['@Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper']

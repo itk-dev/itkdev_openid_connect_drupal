@@ -24,11 +24,19 @@ $config['itkdev_openid_connect_drupal']['authenticators']['generic'] = [
   'client_id' => …,
   // Required client secret.
   'client_secret' => …,
+
+  // Required map from claim to user field.
+  'fields' => [
+    'email' => 'email',
+    'given_name' => 'field_first_name',
+    'family_name' => 'field_last_name',
+  ],
+
   // Optional roles key. Default: 'roles'
   'roles_key' => 'role',
-  // Optional map from OpenID role name to Drupal role (machine) name.
+  // Optional map from OpenID role name to list of Drupal role (machine) names (or a single name).
   'roles_map' => [
-    'admin' => 'administrator',
+    'admin' => ['administrator', 'user_manager'],
     'user' => 'authenticated',
   ],
   // Default Drupal role (machine) names that users will allways get.

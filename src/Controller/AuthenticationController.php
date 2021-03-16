@@ -3,12 +3,16 @@
 namespace Drupal\itkdev_openid_connect_drupal\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
-use Drupal\user\Entity\User;
+use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
+use Psr\Log\LoggerAwareTrait;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LoggerTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -19,12 +23,22 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
  * Authentication controller.
  */
 class AuthenticationController extends ControllerBase {
+  use LoggerTrait;
+  use LoggerAwareTrait;
+
   /**
    * The config helper.
    *
    * @var \Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper
    */
   private $configHelper;
+
+  /**
+   * The user helper.
+   *
+   * @var \Drupal\itkdev_openid_connect_drupal\Helper\UserHelper
+   */
+  private $userHelper;
 
   /**
    * The file system.
@@ -43,10 +57,12 @@ class AuthenticationController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public function __construct(ConfigHelper $configHelper, FileSystemInterface $fileSystem, RequestStack $requestStack) {
+  public function __construct(ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerInterface $logger) {
     $this->configHelper = $configHelper;
+    $this->userHelper = $userHelper;
     $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
+    $this->setLogger($$logger);
   }
 
   /**
@@ -55,8 +71,10 @@ class AuthenticationController extends ControllerBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get(ConfigHelper::class),
+      $container->get(UserHelper::class),
       $container->get('file_system'),
-      $container->get('request_stack')
+      $container->get('request_stack'),
+      $container->get('logger')
     );
   }
 
@@ -101,11 +119,13 @@ class AuthenticationController extends ControllerBase {
     $request = $this->requestStack->getCurrentRequest();
 
     if (!$request->query->has('state') || !$request->query->has('id_token')) {
-      throw new BadRequestHttpException();
+      $this->error('Missing state or id_token in response', ['query' => $request->query->all()]);
+      throw new BadRequestHttpException('Missing state or id_token in response');
     }
 
     $state = $this->getSessionValue(self::STATE_NAME);
     if ($state !== $request->query->get('state')) {
+      $this->error('Invalid state', ['state' => $request->query->get('state')]);
       throw new BadRequestHttpException('Invalid state');
     }
 
@@ -116,45 +136,22 @@ class AuthenticationController extends ControllerBase {
     $payload = json_decode($payload, TRUE);
 
     if (!isset($payload['upn'])) {
-      throw new BadRequestHttpException();
+      $this->error('Invalid payload', ['payload' => $payload]);
+      throw new BadRequestHttpException('Invalid payload');
     }
 
-    $username = $payload['upn'];
-    /** @var \Drupal\user\Entity\User $user */
-    $user = user_load_by_name($username);
+    try {
+      $user = $this->userHelper->buildUser($payload, $options);
+    }
+    catch (EntityStorageException $exception) {
+      $this->error('Cannot create user', ['exception' => $exception]);
+      throw new BadRequestHttpException('Cannot create user', $exception);
+    }
     if (!$user) {
-      $user = User::create([
-        'name' => $username,
-      ]);
-    }
-    $user
-      ->setEmail($payload['email'])
-      ->activate();
-
-    // Remove all user roles.
-    foreach ($user->getRoles() as $role) {
-      $user->removeRole($role);
+      $this->error('User not created', ['payload' => $payload]);
+      throw new BadRequestHttpException('User not created');
     }
 
-    // Add roles.
-    $rolesKey = $options['roles_key'] ?? 'roles';
-    $rolesMap = $options['roles_map'] ?? [];
-    if (isset($payload[$rolesKey])) {
-      foreach ((array) $payload[$rolesKey] as $role) {
-        if (isset($rolesMap[$role])) {
-          $user->addRole($rolesMap[$role]);
-        }
-      }
-    }
-
-    // Add default roles.
-    if (isset($options['default_roles'])) {
-      foreach ($options['default_roles'] as $role) {
-        $user->addRole($role);
-      }
-    }
-
-    $user->save();
     user_login_finalize($user);
 
     $parameters = $this->getSessionValue(self::PARAMETERS_NAME);
@@ -222,6 +219,15 @@ class AuthenticationController extends ControllerBase {
    */
   private function getOptions(string $key): array {
     return $this->configHelper->getAuthenticator($key);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function log($level, $message, array $context = []) {
+    if (NULL !== $this->logger) {
+      $this->logger->log($level, $message, array $context = []);
+    }
   }
 
 }
