@@ -24,31 +24,39 @@ class UserHelper {
    * @throws \Drupal\Core\Entity\EntityStorageException
    */
   public function buildUser(array $payload, array $options): UserInterface {
-    $username = $payload['upn'];
+    if (!isset($options['fields']) || !is_array($options['fields'])) {
+      throw new \RuntimeException('Fields must be an array');
+    }
+    $fields = $options['fields'];
+
+    $nameClaim = $fields['name'] ?? NULL;
+    if (!isset($payload[$nameClaim])) {
+      throw new \RuntimeException(sprintf('Cannot get user name (claim: %s)', $nameClaim));
+    }
+
+    $name = $payload[$nameClaim];
     /** @var \Drupal\user\Entity\User $user */
-    $user = user_load_by_name($username);
+    $user = user_load_by_name($name);
     if (!$user) {
       $user = User::create([
-        'name' => $username,
+        'name' => $name,
       ]);
     }
-    // Use username as default email. May be overridden by “fields“.
-    $user->set('mail', $username);
 
-    if (isset($options['fields']) && is_array($options['fields'])) {
-      foreach ($options['fields'] as $claim => $fieldName) {
-        if (isset($payload[$claim])) {
-          $user->set($fieldName, $payload[$claim]);
-        }
+    if (isset($fields['roles'])) {
+      $this->setRoles($user, $payload, $fields['roles'], $options);
+      // "roles" should not be set directly on user.
+      unset($fields['roles']);
+    }
+
+    foreach ($fields as $fieldName => $claim) {
+      if (isset($payload[$claim])) {
+        $user->set($fieldName, $payload[$claim]);
       }
     }
 
-    $this->setRoles($user, $payload, $options);
-
     // Ensure that the user can actually log in.
     $user->activate();
-
-    $user->save();
 
     return $user;
   }
@@ -60,22 +68,23 @@ class UserHelper {
    *   The user.
    * @param array $payload
    *   The payload.
+   * @param string $rolesKey
+   *   The roles key.
    * @param array $options
    *   The options.
    *
    * @return \Drupal\user\UserInterface
    *   The updated user.
    */
-  public function setRoles(UserInterface $user, array $payload, array $options): UserInterface {
+  public function setRoles(UserInterface $user, array $payload, string $rolesKey, array $options): UserInterface {
     // Remove all user roles.
     foreach ($user->getRoles() as $roleName) {
       $user->removeRole($roleName);
     }
 
     // Add roles from payload mapped to Drupal roles.
-    $rolesKey = $options['roles_key'] ?? 'roles';
-    $rolesMap = $options['roles_map'] ?? [];
     if (isset($payload[$rolesKey])) {
+      $rolesMap = $options['roles'] ?? [];
       foreach ((array) $payload[$rolesKey] as $role) {
         if (isset($rolesMap[$role])) {
           foreach ((array) $rolesMap[$role] as $roleName) {

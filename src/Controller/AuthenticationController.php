@@ -163,21 +163,13 @@ class AuthenticationController extends ControllerBase {
       $this->debug('Payload', ['payload' => $payload]);
     }
 
-    if (!isset($payload['upn'])) {
-      $this->error('Invalid payload', ['payload' => $payload]);
-      throw new BadRequestHttpException('Invalid payload');
-    }
-
     try {
       $user = $this->userHelper->buildUser($payload, $options);
+      $user->save();
     }
     catch (EntityStorageException $exception) {
       $this->error('Cannot create user', ['exception' => $exception]);
       throw new BadRequestHttpException('Cannot create user', $exception);
-    }
-    if (!$user) {
-      $this->error('User not created', ['payload' => $payload]);
-      throw new BadRequestHttpException('User not created');
     }
 
     user_login_finalize($user);
