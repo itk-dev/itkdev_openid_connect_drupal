@@ -18,6 +18,9 @@ $config['itkdev_openid_connect_drupal']['authenticators']['generic'] = [
   // Optional. Default: FALSE
   'show_on_login_form' => TRUE,
 
+  // Optional. Default: FALSE
+  'debug => TRUE,
+
   // Required OpenID Connect Discovery url (cf. https://swagger.io/docs/specification/authentication/openid-connect-discovery/)
   'openid_connect_discovery_url' => …,
   // Required client id.

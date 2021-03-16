@@ -118,6 +118,10 @@ class AuthenticationController extends ControllerBase {
     ];
     $providerOptions['cachePath'] = $this->fileSystem->getTempDirectory() . '/itkdev_openid_connect_drupal-' . $key . '-' . md5($providerOptions['redirectUri']) . '-cache.php';
 
+    if ($option['debug'] ?? FALSE) {
+      $this->debug('Provider options', ['options' => $providerOptions]);
+    }
+
     $request = $this->requestStack->getCurrentRequest();
     $this->setSessionValue(self::PARAMETERS_NAME, ['query' => $request->query->all()]);
 
@@ -154,6 +158,10 @@ class AuthenticationController extends ControllerBase {
     $idToken = $request->query->get('id_token');
     [$jose, $payload, $signature] = array_map('base64_decode', explode('.', $idToken));
     $payload = json_decode($payload, TRUE);
+
+    if ($option['debug'] ?? FALSE) {
+      $this->debug('Payload', ['payload' => $payload]);
+    }
 
     if (!isset($payload['upn'])) {
       $this->error('Invalid payload', ['payload' => $payload]);
