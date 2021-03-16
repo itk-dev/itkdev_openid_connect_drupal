@@ -2,6 +2,7 @@
 
 namespace Drupal\itkdev_openid_connect_drupal\Helper;
 
+use Drupal\user\Entity\User;
 use Drupal\user\UserInterface;
 
 /**

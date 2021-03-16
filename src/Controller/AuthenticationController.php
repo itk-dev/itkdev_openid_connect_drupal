@@ -5,17 +5,18 @@ namespace Drupal\itkdev_openid_connect_drupal\Controller;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
 use Psr\Log\LoggerAwareTrait;
-use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
@@ -57,12 +58,12 @@ class AuthenticationController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public function __construct(ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerInterface $logger) {
+  public function __construct(ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerChannelFactoryInterface $logger) {
     $this->configHelper = $configHelper;
     $this->userHelper = $userHelper;
     $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
-    $this->setLogger($$logger);
+    $this->setLogger($logger->get('itkdev_openid_connect_drupal'));
   }
 
   /**
@@ -74,19 +75,38 @@ class AuthenticationController extends ControllerBase {
       $container->get(UserHelper::class),
       $container->get('file_system'),
       $container->get('request_stack'),
-      $container->get('logger')
+      $container->get('logger.factory')
     );
   }
 
   /**
-   * Authenticate.
+   * Main controller action.
+   *
+   * @param string $key
+   *   The authorizer key.
+   *
+   * @return \Drupal\Core\Routing\TrustedRedirectResponse|RedirectResponse
+   *   The response.
    */
-  public function authenticate(string $key) {
+  public function main(string $key): Response {
+    $request = $this->requestStack->getCurrentRequest();
+    if ($request->query->has('state')) {
+      return $this->process($key);
+    }
+    else {
+      return $this->start($key);
+    }
+  }
+
+  /**
+   * Start OpenID Connect flow.
+   */
+  public function start(string $key): Response {
     $options = $this->getOptions($key);
 
     $providerOptions = [
       'redirectUri' => $this->getUrl(
-        'itkdev_openid_connect_drupal.authorize',
+        'itkdev_openid_connect_drupal.openid_connect',
         [
           'key' => $key,
         ],
@@ -111,9 +131,9 @@ class AuthenticationController extends ControllerBase {
   }
 
   /**
-   * Authorize.
+   * Process OpenID Connect response.
    */
-  public function authorize(string $key) {
+  public function process(string $key): Response {
     $options = $this->getOptions($key);
 
     $request = $this->requestStack->getCurrentRequest();
@@ -218,7 +238,12 @@ class AuthenticationController extends ControllerBase {
    * Get options.
    */
   private function getOptions(string $key): array {
-    return $this->configHelper->getAuthenticator($key);
+    try {
+      return $this->configHelper->getAuthenticator($key);
+    }
+    catch (\Exception $exception) {
+      $this->error(sprintf('Cannot get options for key $s', $key));
+    }
   }
 
   /**
@@ -226,7 +251,7 @@ class AuthenticationController extends ControllerBase {
    */
   public function log($level, $message, array $context = []) {
     if (NULL !== $this->logger) {
-      $this->logger->log($level, $message, array $context = []);
+      $this->logger->log($level, $message, $context);
     }
   }
 

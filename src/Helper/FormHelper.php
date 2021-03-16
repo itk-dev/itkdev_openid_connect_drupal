@@ -57,7 +57,7 @@ class FormHelper {
       $form['itkdev_openid_connect_drupal_authenticators'][$key] = [
         '#title' => $authenticator['name'] ?? $key,
         '#type' => 'link',
-        '#url' => Url::fromRoute('itkdev_openid_connect_drupal.authenticate', ['key' => $key]),
+        '#url' => Url::fromRoute('itkdev_openid_connect_drupal.openid_connect', ['key' => $key]),
         '#attributes' => ['class' => ['button']],
       ];
     }

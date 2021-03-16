@@ -66,7 +66,7 @@ above).
 Generate the authentication url with code like
 
 ```php
-Url::fromRoute('itkdev_openid_connect_drupal.authenticate', ['key' => $key])
+Url::fromRoute('itkdev_openid_connect_drupal.openid_connect, ['key' => $key])
 ```
 
 ## Development

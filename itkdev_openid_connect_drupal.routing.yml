@@ -1,16 +1,7 @@
-itkdev_openid_connect_drupal.authenticate:
-  path: '/itkdev_openid_connect_drupal/authenticate/{key}'
-  defaults:
-    _controller: '\Drupal\itkdev_openid_connect_drupal\Controller\AuthenticationController::authenticate'
-  requirements:
-    _access: 'TRUE'
-  options:
-    no_cache: 'TRUE'
-
-itkdev_openid_connect_drupal.authorize:
+itkdev_openid_connect_drupal.openid_connect:
   path: '/openid-connect/{key}'
   defaults:
-    _controller: '\Drupal\itkdev_openid_connect_drupal\Controller\AuthenticationController::authorize'
+    _controller: '\Drupal\itkdev_openid_connect_drupal\Controller\AuthenticationController::main'
   requirements:
     _access: 'TRUE'
   options:
