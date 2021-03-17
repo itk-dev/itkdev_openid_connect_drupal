@@ -114,6 +114,12 @@ class AuthenticationController extends ControllerBase {
 
   /**
    * Start OpenID Connect flow.
+   *
+   * @param string $key
+   *   The authenticator key.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response.
    */
   private function start(string $key): Response {
     $options = $this->getOptions($key);
@@ -150,6 +156,12 @@ class AuthenticationController extends ControllerBase {
 
   /**
    * Process OpenID Connect response.
+   *
+   * @param string $key
+   *   The authenticator key.
+   *
+   * @return \Symfony\Component\HttpFoundation\Response
+   *   The response.
    */
   private function process(string $key): Response {
     $options = $this->getOptions($key);
@@ -196,6 +208,12 @@ class AuthenticationController extends ControllerBase {
 
   /**
    * Render error.
+   *
+   * @param string $key
+   *   The authenticator key.
+   *
+   * @return array
+   *   The render array.
    */
   private function diplayError(string $key): array {
     $options = $this->getOptions($key);
@@ -261,14 +279,30 @@ class AuthenticationController extends ControllerBase {
   }
 
   /**
-   * Set session value.
+   * Set session attribute value.
+   *
+   * @param string $name
+   *   The session attribute name.
+   * @param mixed $value
+   *   The session attribute value.
    */
   private function setSessionValue(string $name, $value) {
     $this->getSession()->set($name, $value);
   }
 
   /**
-   * Get session value.
+   * Get and remove session attribute value.
+   *
+   * By default this function removes the value from the session, but it's
+   * possible to just peek at the value of need be.
+   *
+   * @param string $name
+   *   The session attribute name.
+   * @param bool $peek
+   *   If set, the session value will not be removed.
+   *
+   * @return mixed
+   *   The session value.
    */
   private function getSessionValue(string $name, bool $peek = FALSE) {
     $value = $this->getSession()->get($name);
@@ -280,7 +314,13 @@ class AuthenticationController extends ControllerBase {
   }
 
   /**
-   * Get options.
+   * Get options for an authenticator.
+   *
+   * @param string $key
+   *   The authenticator key.
+   *
+   * @return array
+   *   The authenticator options.
    */
   private function getOptions(string $key): array {
     try {
