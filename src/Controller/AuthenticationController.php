@@ -28,6 +28,16 @@ class AuthenticationController extends ControllerBase {
   use LoggerAwareTrait;
 
   /**
+   * Session name for storing OAuth2 state.
+   */
+  private const STATE_NAME = 'oauth2state';
+
+  /**
+   * Session name for storing request query parameters.
+   */
+  private const PARAMETERS_NAME = 'oauth2params';
+
+  /**
    * The config helper.
    *
    * @var \Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper
@@ -242,9 +252,6 @@ class AuthenticationController extends ControllerBase {
       // Prevent bubble error. @todo documentation!
       ->toString(TRUE)->getGeneratedUrl();
   }
-
-  private const STATE_NAME = 'oauth2state';
-  private const PARAMETERS_NAME = 'oauth2params';
 
   /**
    * Get session.
