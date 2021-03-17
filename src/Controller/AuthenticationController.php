@@ -85,23 +85,27 @@ class AuthenticationController extends ControllerBase {
    * @param string $key
    *   The authorizer key.
    *
-   * @return \Drupal\Core\Routing\TrustedRedirectResponse|RedirectResponse
+   * @return \Symfony\Component\HttpFoundation\Response|array
    *   The response.
    */
-  public function main(string $key): Response {
+  public function main(string $key) {
     $request = $this->requestStack->getCurrentRequest();
+
+    if ($request->query->has('error')) {
+      return $this->diplayError($key);
+    }
+
     if ($request->query->has('state')) {
       return $this->process($key);
     }
-    else {
-      return $this->start($key);
-    }
+
+    return $this->start($key);
   }
 
   /**
    * Start OpenID Connect flow.
    */
-  public function start(string $key): Response {
+  private function start(string $key): Response {
     $options = $this->getOptions($key);
 
     $providerOptions = [
@@ -137,7 +141,7 @@ class AuthenticationController extends ControllerBase {
   /**
    * Process OpenID Connect response.
    */
-  public function process(string $key): Response {
+  private function process(string $key): Response {
     $options = $this->getOptions($key);
 
     $request = $this->requestStack->getCurrentRequest();
@@ -178,6 +182,40 @@ class AuthenticationController extends ControllerBase {
     $location = $parameters['query']['location'] ?? $this->getUrl('<front>');
 
     return new RedirectResponse($location);
+  }
+
+  /**
+   * Render error.
+   */
+  private function diplayError(string $key): array {
+    $options = $this->getOptions($key);
+    $request = $this->requestStack->getCurrentRequest();
+
+    $this->error('Error', ['query' => $request->query->all()]);
+
+    // @todo use a template for this.
+    return [
+      'error' => [
+        '#markup' => $options['name'] ?? $request->query->get('error'),
+        '#prefix' => '<h1>',
+        '#suffix' => '</h1>',
+      ],
+      'error_description' => [
+        '#markup' => $request->query->get('error_description'),
+        '#prefix' => '<pre>',
+        '#suffix' => '</pre>',
+      ],
+      'authenticate' => [
+        '#type' => 'link',
+        '#title' => $this->t('Try again'),
+        '#url' => Url::fromRoute(
+          'itkdev_openid_connect_drupal.openid_connect',
+          [
+            'key' => $key,
+          ]
+        ),
+      ],
+    ];
   }
 
   /**
