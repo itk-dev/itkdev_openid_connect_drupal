@@ -1,5 +1,5 @@
 itkdev_openid_connect_drupal.openid_connect:
-  path: '/openid-connect/{key}'
+  path: '/itkdev_openid_connect_drupal/authenticate/{key}'
   defaults:
     _controller: '\Drupal\itkdev_openid_connect_drupal\Controller\AuthenticationController::main'
   requirements:
