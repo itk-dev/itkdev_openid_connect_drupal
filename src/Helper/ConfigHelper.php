@@ -10,10 +10,15 @@ class ConfigHelper {
   /**
    * Get authenticators.
    */
-  public function getAuthenticators() {
+  public function getAuthenticators(): array {
     $config = \Drupal::config('itkdev_openid_connect_drupal');
 
-    return $config->get('authenticators');
+    $authenticators = $config->get('authenticators');
+    if (!is_array($authenticators)) {
+      $authenticators = [];
+    }
+
+    return $authenticators;
   }
 
   /**
