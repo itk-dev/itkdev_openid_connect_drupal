@@ -84,7 +84,7 @@ class UserHelper {
 
     // Add roles from payload mapped to Drupal roles.
     if (isset($payload[$rolesKey])) {
-      $rolesMap = $options['roles'] ?? [];
+      $rolesMap = $options['roles']['map'] ?? [];
       foreach ((array) $payload[$rolesKey] as $role) {
         if (isset($rolesMap[$role])) {
           foreach ((array) $rolesMap[$role] as $roleName) {
@@ -95,10 +95,9 @@ class UserHelper {
     }
 
     // Add default roles.
-    if (isset($options['default_roles'])) {
-      foreach ($options['default_roles'] as $roleName) {
-        $user->addRole($roleName);
-      }
+    $defaultRoles = $options['roles']['default'] ?? [];
+    foreach ($defaultRoles as $roleName) {
+      $user->addRole($roleName);
     }
 
     return $user;
