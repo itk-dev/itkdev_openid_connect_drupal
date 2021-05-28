@@ -81,8 +81,8 @@ class AuthenticationController extends ControllerBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get(ConfigHelper::class),
-      $container->get(UserHelper::class),
+      $container->get('itkdev_openid_connect_drupal.config_helper'),
+      $container->get('itkdev_openid_connect_drupal.user_helper'),
       $container->get('file_system'),
       $container->get('request_stack'),
       $container->get('logger.factory')
