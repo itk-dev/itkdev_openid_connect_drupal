@@ -138,7 +138,7 @@ class AuthenticationController extends ControllerBase {
     ];
     $providerOptions['cachePath'] = $this->fileSystem->getTempDirectory() . '/itkdev_openid_connect_drupal-' . $key . '-' . md5($providerOptions['redirectUri']) . '-cache.php';
 
-    if ($option['debug'] ?? FALSE) {
+    if ($options['debug'] ?? FALSE) {
       $this->debug('Provider options', ['options' => $providerOptions]);
     }
 
@@ -185,7 +185,7 @@ class AuthenticationController extends ControllerBase {
     [$jose, $payload, $signature] = array_map('base64_decode', explode('.', $idToken));
     $payload = json_decode($payload, TRUE);
 
-    if ($option['debug'] ?? FALSE) {
+    if ($options['debug'] ?? FALSE) {
       $this->debug('Payload', ['payload' => $payload]);
     }
 
