@@ -329,6 +329,8 @@ class AuthenticationController extends ControllerBase {
     catch (\Exception $exception) {
       $this->error(sprintf('Cannot get options for key $s', $key));
     }
+
+    return [];
   }
 
   /**
