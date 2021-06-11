@@ -6,6 +6,8 @@ services:
 
   itkdev_openid_connect_drupal.user_helper:
     class: Drupal\itkdev_openid_connect_drupal\Helper\UserHelper
+    arguments:
+      - '@entity_type.manager'
 
   itkdev_openid_connect_drupal.form_helper:
     class: Drupal\itkdev_openid_connect_drupal\Helper\FormHelper

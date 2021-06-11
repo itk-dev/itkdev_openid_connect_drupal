@@ -3,11 +3,12 @@
 namespace Drupal\itkdev_openid_connect_drupal\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
-use Drupal\Core\Entity\EntityStorageException;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
+use Drupal\externalauth\AuthmapInterface;
+use Drupal\externalauth\ExternalAuthInterface;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
@@ -30,12 +31,31 @@ class AuthenticationController extends ControllerBase {
   /**
    * Session name for storing OAuth2 state.
    */
-  private const STATE_NAME = 'oauth2state';
+  private const SESSION_STATE_NAME = 'itkdev_openid_connect_drupal.oauth2state';
 
   /**
    * Session name for storing request query parameters.
    */
-  private const PARAMETERS_NAME = 'oauth2params';
+  private const SESSION_REQUEST_QUERY = 'itkdev_openid_connect_drupal.request_query';
+
+  /**
+   * Session name for storing provider (id).
+   */
+  private const SESSION_PROVIDER = 'itkdev_openid_connect_drupal.provider';
+
+  /**
+   * The external auth.
+   *
+   * @var \Drupal\externalauth\ExternalAuthInterface
+   */
+  private $externalAuth;
+
+  /**
+   * The authmap.
+   *
+   * @var \Drupal\externalauth\AuthmapInterface
+   */
+  private $authMap;
 
   /**
    * The config helper.
@@ -68,7 +88,9 @@ class AuthenticationController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public function __construct(ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerChannelFactoryInterface $logger) {
+  public function __construct(ExternalAuthInterface $externalAuth, AuthmapInterface $authMap, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerChannelFactoryInterface $logger) {
+    $this->externalAuth = $externalAuth;
+    $this->authMap = $authMap;
     $this->configHelper = $configHelper;
     $this->userHelper = $userHelper;
     $this->fileSystem = $fileSystem;
@@ -81,6 +103,8 @@ class AuthenticationController extends ControllerBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
+      $container->get('externalauth.externalauth'),
+      $container->get('externalauth.authmap'),
       $container->get('itkdev_openid_connect_drupal.config_helper'),
       $container->get('itkdev_openid_connect_drupal.user_helper'),
       $container->get('file_system'),
@@ -143,13 +167,13 @@ class AuthenticationController extends ControllerBase {
     }
 
     $request = $this->requestStack->getCurrentRequest();
-    $this->setSessionValue(self::PARAMETERS_NAME, ['query' => $request->query->all()]);
+    $this->setSessionValue(self::SESSION_REQUEST_QUERY, ['query' => $request->query->all()]);
 
     $provider = new OpenIdConfigurationProvider($providerOptions);
 
     $authorizationUrl = $provider->getAuthorizationUrl();
 
-    $this->setSessionValue(self::STATE_NAME, $provider->getState());
+    $this->setSessionValue(self::SESSION_STATE_NAME, $provider->getState());
 
     return new TrustedRedirectResponse($authorizationUrl);
   }
@@ -162,6 +186,8 @@ class AuthenticationController extends ControllerBase {
    *
    * @return \Symfony\Component\HttpFoundation\Response
    *   The response.
+   *
+   * @throws \Drupal\Core\Entity\EntityStorageException
    */
   private function process(string $key): Response {
     $options = $this->getOptions($key);
@@ -173,7 +199,7 @@ class AuthenticationController extends ControllerBase {
       throw new BadRequestHttpException('Missing state or id_token in response');
     }
 
-    $state = $this->getSessionValue(self::STATE_NAME);
+    $state = $this->getSessionValue(self::SESSION_STATE_NAME);
     if ($state !== $request->query->get('state')) {
       $this->error('Invalid state', ['state' => $request->query->get('state')]);
       throw new BadRequestHttpException('Invalid state');
@@ -189,18 +215,18 @@ class AuthenticationController extends ControllerBase {
       $this->debug('Payload', ['payload' => $payload]);
     }
 
-    try {
-      $user = $this->userHelper->buildUser($payload, $options);
-      $user->save();
-    }
-    catch (EntityStorageException $exception) {
-      $this->error('Cannot create user', ['exception' => $exception]);
-      throw new BadRequestHttpException('Cannot create user', $exception);
-    }
+    $provider = 'itkdev_openid_connect.' . $key;
+    $user = $this->userHelper->buildUser($payload, $options);
+    $user->save();
+    // To update user data and handle roles on every login, we use
+    // ExternalAuthInterface::userLoginFinalize and update the auth map
+    // ourselves rather than using ExternalAuthInterface::loginRegister or
+    // similar.
+    $this->externalAuth->userLoginFinalize($user, $user->getAccountName(), $provider);
+    $this->authMap->save($user, $provider, $user->getAccountName(), $payload);
+    $this->setSessionValue(self::SESSION_PROVIDER, $provider);
 
-    user_login_finalize($user);
-
-    $parameters = $this->getSessionValue(self::PARAMETERS_NAME);
+    $parameters = $this->getSessionValue(self::SESSION_REQUEST_QUERY);
     $location = $parameters['query']['location'] ?? $this->getUrl('<front>');
 
     return new RedirectResponse($location);
