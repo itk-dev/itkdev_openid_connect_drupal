@@ -6,6 +6,7 @@ use Drupal\Component\Utility\Html;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\Url;
+use Drupal\itkdev_openid_connect_drupal\AuthorizationManager;
 
 /**
  * Form helper.
@@ -14,17 +15,17 @@ class FormHelper {
   use StringTranslationTrait;
 
   /**
-   * The config helper.
+   * The authorization manager.
    *
-   * @var ConfigHelper
+   * @var \Drupal\itkdev_openid_connect_drupal\AuthorizationManager
    */
-  private $configHelper;
+  private $authorizationManager;
 
   /**
    * Constructor.
    */
-  public function __construct(ConfigHelper $configHelper) {
-    $this->configHelper = $configHelper;
+  public function __construct(AuthorizationManager $authorizationManager) {
+    $this->authorizationManager = $authorizationManager;
   }
 
   /**
@@ -42,7 +43,7 @@ class FormHelper {
    */
   public function alterUserLoginForm(array &$form, FormStateInterface $formState) {
     $authenticators = array_filter(
-      $this->configHelper->getAuthenticators(),
+      $this->authorizationManager->getAuthenticators(),
       static function (array $authenticator) {
         return $authenticator['show_on_login_form'] ?? FALSE;
       }

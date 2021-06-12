@@ -4,15 +4,14 @@ namespace Drupal\itkdev_openid_connect_drupal\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
-use Drupal\externalauth\AuthmapInterface;
-use Drupal\externalauth\ExternalAuthInterface;
+use Drupal\itkdev_openid_connect_drupal\AuthorizationManager;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
 use Psr\Log\LoggerAwareTrait;
+use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -39,23 +38,11 @@ class AuthenticationController extends ControllerBase {
   private const SESSION_REQUEST_QUERY = 'itkdev_openid_connect_drupal.request_query';
 
   /**
-   * Session name for storing provider (id).
-   */
-  private const SESSION_PROVIDER = 'itkdev_openid_connect_drupal.provider';
-
-  /**
-   * The external auth.
+   * The authorization manager.
    *
-   * @var \Drupal\externalauth\ExternalAuthInterface
+   * @var \Drupal\itkdev_openid_connect_drupal\AuthorizationManager
    */
-  private $externalAuth;
-
-  /**
-   * The authmap.
-   *
-   * @var \Drupal\externalauth\AuthmapInterface
-   */
-  private $authMap;
+  private $authorizationManager;
 
   /**
    * The config helper.
@@ -88,14 +75,13 @@ class AuthenticationController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public function __construct(ExternalAuthInterface $externalAuth, AuthmapInterface $authMap, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerChannelFactoryInterface $logger) {
-    $this->externalAuth = $externalAuth;
-    $this->authMap = $authMap;
+  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerInterface $logger) {
+    $this->authorizationManager = $authorizationManager;
     $this->configHelper = $configHelper;
     $this->userHelper = $userHelper;
     $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
-    $this->setLogger($logger->get('itkdev_openid_connect_drupal'));
+    $this->setLogger($logger);
   }
 
   /**
@@ -103,13 +89,12 @@ class AuthenticationController extends ControllerBase {
    */
   public static function create(ContainerInterface $container) {
     return new static(
-      $container->get('externalauth.externalauth'),
-      $container->get('externalauth.authmap'),
+      $container->get('itkdev_openid_connect_drupal.authorization_manager'),
       $container->get('itkdev_openid_connect_drupal.config_helper'),
       $container->get('itkdev_openid_connect_drupal.user_helper'),
       $container->get('file_system'),
       $container->get('request_stack'),
-      $container->get('logger.factory')
+      $container->get('logger.channel.itkdev_openid_connect_drupal')
     );
   }
 
@@ -215,16 +200,9 @@ class AuthenticationController extends ControllerBase {
       $this->debug('Payload', ['payload' => $payload]);
     }
 
-    $provider = 'itkdev_openid_connect.' . $key;
     $user = $this->userHelper->buildUser($payload, $options);
     $user->save();
-    // To update user data and handle roles on every login, we use
-    // ExternalAuthInterface::userLoginFinalize and update the auth map
-    // ourselves rather than using ExternalAuthInterface::loginRegister or
-    // similar.
-    $this->externalAuth->userLoginFinalize($user, $user->getAccountName(), $provider);
-    $this->authMap->save($user, $provider, $user->getAccountName(), $payload);
-    $this->setSessionValue(self::SESSION_PROVIDER, $provider);
+    $this->authorizationManager->authorize($user, $key, $payload);
 
     $parameters = $this->getSessionValue(self::SESSION_REQUEST_QUERY);
     $location = $parameters['query']['location'] ?? $this->getUrl('<front>');

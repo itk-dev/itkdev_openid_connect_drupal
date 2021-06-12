@@ -9,7 +9,21 @@ services:
     arguments:
       - '@entity_type.manager'
 
+  itkdev_openid_connect_drupal.authorization_manager:
+    class: Drupal\itkdev_openid_connect_drupal\AuthorizationManager
+    arguments:
+      - '@itkdev_openid_connect_drupal.config_helper'
+      - '@externalauth.externalauth'
+      - '@externalauth.authmap'
+      - '@session'
+      - '@logger.channel.itkdev_openid_connect_drupal'
+
   itkdev_openid_connect_drupal.form_helper:
     class: Drupal\itkdev_openid_connect_drupal\Helper\FormHelper
     arguments:
-      - '@itkdev_openid_connect_drupal.config_helper'
+      - '@itkdev_openid_connect_drupal.authorization_manager'
+
+  logger.channel.itkdev_openid_connect_drupal:
+    parent: logger.channel_base
+    arguments:
+      - 'itkdev_openid_connect_drupal'

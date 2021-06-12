@@ -2,18 +2,33 @@
 
 namespace Drupal\itkdev_openid_connect_drupal\Helper;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
+
 /**
  * Config helper.
  */
 class ConfigHelper {
+  public const MODULE = 'itkdev_openid_connect_drupal';
+
+  /**
+   * The itkdev_openid_connect_drupal config.
+   *
+   * @var \Drupal\Core\Config\ImmutableConfig
+   */
+  private $config;
+
+  /**
+   * Constructor.
+   */
+  public function __construct(ConfigFactoryInterface $configFactory) {
+    $this->config = $configFactory->get('itkdev_openid_connect_drupal');
+  }
 
   /**
    * Get authenticators.
    */
   public function getAuthenticators(): array {
-    $config = \Drupal::config('itkdev_openid_connect_drupal');
-
-    $authenticators = $config->get('authenticators');
+    $authenticators = $this->config->get('authenticators');
     if (!is_array($authenticators)) {
       $authenticators = [];
     }
