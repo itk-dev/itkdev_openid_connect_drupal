@@ -113,6 +113,7 @@ class UserHelper {
 
     $name = $data['name'];
     $users = $this->userStorage->loadByProperties(['name' => $name]);
+    /** @var UserInterface $user */
     $user = $users ? reset($users) : NULL;
     if (!$user) {
       $user = $this->userStorage->create([
@@ -127,6 +128,8 @@ class UserHelper {
     foreach ($data as $name => $value) {
       $user->set($name, $value);
     }
+
+    $user->activate();
 
     return $user;
   }
