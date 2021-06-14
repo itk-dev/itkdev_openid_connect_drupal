@@ -8,6 +8,7 @@ use Drupal\Core\Routing\LocalRedirectResponse;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
 use Drupal\itkdev_openid_connect_drupal\AuthorizationManager;
+use Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
@@ -73,14 +74,22 @@ class AuthenticationController extends ControllerBase {
   private $requestStack;
 
   /**
+   * The cache item pool.
+   *
+   * @var \Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool
+   */
+  private $cacheItemPool;
+
+  /**
    * {@inheritdoc}
    */
-  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerInterface $logger) {
+  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, CacheItemPool $cacheItemPool, LoggerInterface $logger) {
     $this->authorizationManager = $authorizationManager;
     $this->configHelper = $configHelper;
     $this->userHelper = $userHelper;
     $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
+    $this->cacheItemPool = $cacheItemPool;
     $this->setLogger($logger);
   }
 
@@ -94,6 +103,7 @@ class AuthenticationController extends ControllerBase {
       $container->get('itkdev_openid_connect_drupal.user_helper'),
       $container->get('file_system'),
       $container->get('request_stack'),
+      $container->get('itkdev_openid_connect_drupal.cache_item_pool'),
       $container->get('logger.channel.itkdev_openid_connect_drupal')
     );
   }
@@ -133,6 +143,7 @@ class AuthenticationController extends ControllerBase {
   private function start(string $key): Response {
     $options = $this->getOptions($key);
 
+    $item = NULL;
     $providerOptions = [
       'redirectUri' => $this->getUrl(
         'itkdev_openid_connect_drupal.openid_connect',
@@ -141,11 +152,11 @@ class AuthenticationController extends ControllerBase {
         ],
         ['absolute' => TRUE]
       ),
-      'urlConfiguration' => $options['openid_connect_discovery_url'],
+      'openIDConnectMetadataUrl' => $options['openid_connect_discovery_url'],
+      'cacheItemPool' => $this->cacheItemPool,
       'clientId' => $options['client_id'],
       'clientSecret' => $options['client_secret'],
     ];
-    $providerOptions['cachePath'] = $this->fileSystem->getTempDirectory() . '/itkdev_openid_connect_drupal-' . $key . '-' . md5($providerOptions['redirectUri']) . '-cache.php';
 
     if ($options['debug'] ?? FALSE) {
       $this->debug('Provider options', ['options' => $providerOptions]);
@@ -156,7 +167,16 @@ class AuthenticationController extends ControllerBase {
 
     $provider = new OpenIdConfigurationProvider($providerOptions);
 
-    $authorizationUrl = $provider->getAuthorizationUrl();
+    $state = $provider->generateState();
+    $nonce = $provider->generateNonce();
+
+    $this->setSessionValue('oauth2state', $state);
+    $this->setSessionValue('oauth2nonce', $nonce);
+
+    $authorizationUrl = $provider->getAuthorizationUrl([
+      'state' => $state,
+      'nonce' => $nonce,
+    ]);
 
     $this->setSessionValue(self::SESSION_STATE_NAME, $provider->getState());
 
