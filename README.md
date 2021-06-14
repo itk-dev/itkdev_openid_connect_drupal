@@ -18,6 +18,9 @@ $config['itkdev_openid_connect_drupal']['authenticators']['generic'] = [
   // Optional. Default: FALSE
   'show_on_login_form' => TRUE,
 
+  // Optional. Redirect after login (default: <front>)
+  'default_location' => '/content',
+
   // Optional. Default: FALSE
   'debug => TRUE,
 

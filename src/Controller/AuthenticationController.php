@@ -4,6 +4,7 @@ namespace Drupal\itkdev_openid_connect_drupal\Controller;
 
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\Routing\LocalRedirectResponse;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
 use Drupal\itkdev_openid_connect_drupal\AuthorizationManager;
@@ -14,7 +15,6 @@ use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
@@ -205,9 +205,11 @@ class AuthenticationController extends ControllerBase {
     $this->authorizationManager->authorize($user, $key, $payload);
 
     $parameters = $this->getSessionValue(self::SESSION_REQUEST_QUERY);
-    $location = $parameters['query']['location'] ?? $this->getUrl('<front>');
+    $location = $parameters['query']['location']
+      ?? $options['default_location']
+      ?? $this->getUrl('<front>');
 
-    return new RedirectResponse($location);
+    return new LocalRedirectResponse($location);
   }
 
   /**
