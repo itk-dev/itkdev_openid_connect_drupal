@@ -129,11 +129,16 @@ class AuthenticationController extends ControllerBase {
       return $this->diplayError($key);
     }
 
-    if ($request->query->has('state')) {
-      return $this->process($key);
-    }
+    try {
+      if ($request->query->has('state')) {
+        return $this->process($key);
+      }
 
-    return $this->start($key);
+      return $this->start($key);
+    }
+    catch (\Exception $exception) {
+      return $this->displayException($key, $exception);
+    }
   }
 
   /**
@@ -226,29 +231,71 @@ class AuthenticationController extends ControllerBase {
   private function diplayError(string $key): array {
     $options = $this->getOptions($key);
     $request = $this->requestStack->getCurrentRequest();
+    $this->error('Error', [
+      'query' => $request->query->all(),
+    ]);
 
-    $this->error('Error', ['query' => $request->query->all()]);
+    return $this->renderError($key, [
+      'message' => $request->query->get('error'),
+      'description' => $request->query->get('error_description'),
+    ]);
+  }
 
-    // @todo use a template for this.
+  /**
+   * Render error.
+   *
+   * @param string $key
+   *   The authenticator key.
+   * @param \Exception $exception
+   *   The exception.
+   *
+   * @return array
+   *   The render array.
+   */
+  private function displayException(string $key, \Exception $exception): array {
+    $request = $this->requestStack->getCurrentRequest();
+
+    $this->error('Exception: ' . $exception->getMessage(), [
+      'query' => $request->query->all(),
+      'exception' => $exception,
+    ]);
+
+    return $this->renderError($key, [
+      'message' => $exception->getMessage(),
+    ]);
+  }
+
+  /**
+   * Render an error message.
+   */
+  private function renderError(string $key, array $error): array {
+    $request = $this->requestStack->getCurrentRequest();
+    $options = $this->getOptions($key);
+
+    $title = $error['message'] ?? $error['error'] ?? $options['name'];
+    $description = $error['description'] ?? NULL;
+
     return [
       'error' => [
-        '#markup' => $options['name'] ?? $request->query->get('error'),
+        '#markup' => $title,
         '#prefix' => '<h1>',
         '#suffix' => '</h1>',
       ],
       'error_description' => [
-        '#markup' => $request->query->get('error_description'),
+        '#markup' => $description,
         '#prefix' => '<pre>',
         '#suffix' => '</pre>',
+        '#access' => NULL !== $description,
       ],
       'authenticate' => [
         '#type' => 'link',
         '#title' => $this->t('Try again'),
         '#url' => Url::fromRoute(
           'itkdev_openid_connect_drupal.openid_connect',
-          [
+          array_filter([
             'key' => $key,
-          ]
+            'location' => $request->query->get('location'),
+          ])
         ),
       ],
     ];
