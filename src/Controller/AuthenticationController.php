@@ -31,7 +31,12 @@ class AuthenticationController extends ControllerBase {
   /**
    * Session name for storing OAuth2 state.
    */
-  private const SESSION_STATE_NAME = 'itkdev_openid_connect_drupal.oauth2state';
+  private const SESSION_STATE = 'itkdev_openid_connect_drupal.oauth2state';
+
+  /**
+   * Session name for storing OAuth2 nonce.
+   */
+  private const SESSION_NONCE = 'itkdev_openid_connect_drupal.oauth2nonce';
 
   /**
    * Session name for storing request query parameters.
@@ -141,44 +146,22 @@ class AuthenticationController extends ControllerBase {
    *   The response.
    */
   private function start(string $key): Response {
-    $options = $this->getOptions($key);
-
-    $item = NULL;
-    $providerOptions = [
-      'redirectUri' => $this->getUrl(
-        'itkdev_openid_connect_drupal.openid_connect',
-        [
-          'key' => $key,
-        ],
-        ['absolute' => TRUE]
-      ),
-      'openIDConnectMetadataUrl' => $options['openid_connect_discovery_url'],
-      'cacheItemPool' => $this->cacheItemPool,
-      'clientId' => $options['client_id'],
-      'clientSecret' => $options['client_secret'],
-    ];
-
-    if ($options['debug'] ?? FALSE) {
-      $this->debug('Provider options', ['options' => $providerOptions]);
-    }
-
     $request = $this->requestStack->getCurrentRequest();
     $this->setSessionValue(self::SESSION_REQUEST_QUERY, ['query' => $request->query->all()]);
 
-    $provider = new OpenIdConfigurationProvider($providerOptions);
-
+    $provider = $this->getOpenIdConfigurationProvider($key);
     $state = $provider->generateState();
     $nonce = $provider->generateNonce();
 
-    $this->setSessionValue('oauth2state', $state);
-    $this->setSessionValue('oauth2nonce', $nonce);
+    $this->setSessionValue(static::SESSION_STATE, $state);
+    $this->setSessionValue(static::SESSION_NONCE, $nonce);
 
     $authorizationUrl = $provider->getAuthorizationUrl([
       'state' => $state,
       'nonce' => $nonce,
     ]);
 
-    $this->setSessionValue(self::SESSION_STATE_NAME, $provider->getState());
+    $this->setSessionValue(self::SESSION_STATE, $provider->getState());
 
     return new TrustedRedirectResponse($authorizationUrl);
   }
@@ -204,18 +187,17 @@ class AuthenticationController extends ControllerBase {
       throw new BadRequestHttpException('Missing state or id_token in response');
     }
 
-    $state = $this->getSessionValue(self::SESSION_STATE_NAME);
+    $state = $this->getSessionValue(self::SESSION_STATE);
     if ($state !== $request->query->get('state')) {
       $this->error('Invalid state', ['state' => $request->query->get('state')]);
       throw new BadRequestHttpException('Invalid state');
     }
 
-    // Retrieve id_token and decode it.
-    // @see https://tools.ietf.org/html/rfc7519
-    $idToken = $request->query->get('id_token');
-    [$jose, $payload, $signature] = array_map('base64_decode', explode('.', $idToken));
-    $payload = json_decode($payload, TRUE);
+    $provider = $this->getOpenIdConfigurationProvider($key);
 
+    $payload = (array) $provider->validateIdToken($request->query->get('id_token'), $this->getSessionValue(static::SESSION_NONCE));
+
+    // Authentication successful.
     if ($options['debug'] ?? FALSE) {
       $this->debug('Payload', ['payload' => $payload]);
     }
@@ -270,6 +252,33 @@ class AuthenticationController extends ControllerBase {
         ),
       ],
     ];
+  }
+
+  /**
+   * Get an OpenIdConfigurationProvider instance.
+   */
+  private function getOpenIdConfigurationProvider(string $key): OpenIdConfigurationProvider {
+    $options = $this->getOptions($key);
+
+    $providerOptions = [
+      'redirectUri' => $this->getUrl(
+        'itkdev_openid_connect_drupal.openid_connect',
+        [
+          'key' => $key,
+        ],
+        ['absolute' => TRUE]
+      ),
+      'openIDConnectMetadataUrl' => $options['openid_connect_discovery_url'],
+      'cacheItemPool' => $this->cacheItemPool,
+      'clientId' => $options['client_id'],
+      'clientSecret' => $options['client_secret'],
+    ];
+
+    if ($options['debug'] ?? FALSE) {
+      $this->debug('Provider options', ['options' => $providerOptions]);
+    }
+
+    return new OpenIdConfigurationProvider($providerOptions);
   }
 
   /**
