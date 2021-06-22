@@ -11,7 +11,7 @@
     ],
     "require": {
         "php": "^7.2",
-        "itk-dev/openid-connect": "^1.0"
+        "itk-dev/openid-connect": "^2.1"
     },
     "require-dev": {
         "drupal/coder": "^8.3",

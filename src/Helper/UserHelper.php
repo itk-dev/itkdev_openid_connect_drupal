@@ -113,7 +113,7 @@ class UserHelper {
 
     $name = $data['name'];
     $users = $this->userStorage->loadByProperties(['name' => $name]);
-    /** @var UserInterface $user */
+    /** @var \Drupal\user\UserInterface $user */
     $user = $users ? reset($users) : NULL;
     if (!$user) {
       $user = $this->userStorage->create([

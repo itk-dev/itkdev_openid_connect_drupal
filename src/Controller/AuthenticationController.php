@@ -8,6 +8,7 @@ use Drupal\Core\Routing\LocalRedirectResponse;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
 use Drupal\itkdev_openid_connect_drupal\AuthorizationManager;
+use Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
@@ -30,7 +31,12 @@ class AuthenticationController extends ControllerBase {
   /**
    * Session name for storing OAuth2 state.
    */
-  private const SESSION_STATE_NAME = 'itkdev_openid_connect_drupal.oauth2state';
+  private const SESSION_STATE = 'itkdev_openid_connect_drupal.oauth2state';
+
+  /**
+   * Session name for storing OAuth2 nonce.
+   */
+  private const SESSION_NONCE = 'itkdev_openid_connect_drupal.oauth2nonce';
 
   /**
    * Session name for storing request query parameters.
@@ -73,14 +79,22 @@ class AuthenticationController extends ControllerBase {
   private $requestStack;
 
   /**
+   * The cache item pool.
+   *
+   * @var \Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool
+   */
+  private $cacheItemPool;
+
+  /**
    * {@inheritdoc}
    */
-  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, LoggerInterface $logger) {
+  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, CacheItemPool $cacheItemPool, LoggerInterface $logger) {
     $this->authorizationManager = $authorizationManager;
     $this->configHelper = $configHelper;
     $this->userHelper = $userHelper;
     $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
+    $this->cacheItemPool = $cacheItemPool;
     $this->setLogger($logger);
   }
 
@@ -94,6 +108,7 @@ class AuthenticationController extends ControllerBase {
       $container->get('itkdev_openid_connect_drupal.user_helper'),
       $container->get('file_system'),
       $container->get('request_stack'),
+      $container->get('itkdev_openid_connect_drupal.cache_item_pool'),
       $container->get('logger.channel.itkdev_openid_connect_drupal')
     );
   }
@@ -114,11 +129,16 @@ class AuthenticationController extends ControllerBase {
       return $this->diplayError($key);
     }
 
-    if ($request->query->has('state')) {
-      return $this->process($key);
-    }
+    try {
+      if ($request->query->has('state')) {
+        return $this->process($key);
+      }
 
-    return $this->start($key);
+      return $this->start($key);
+    }
+    catch (\Exception $exception) {
+      return $this->displayException($key, $exception);
+    }
   }
 
   /**
@@ -131,34 +151,22 @@ class AuthenticationController extends ControllerBase {
    *   The response.
    */
   private function start(string $key): Response {
-    $options = $this->getOptions($key);
-
-    $providerOptions = [
-      'redirectUri' => $this->getUrl(
-        'itkdev_openid_connect_drupal.openid_connect',
-        [
-          'key' => $key,
-        ],
-        ['absolute' => TRUE]
-      ),
-      'urlConfiguration' => $options['openid_connect_discovery_url'],
-      'clientId' => $options['client_id'],
-      'clientSecret' => $options['client_secret'],
-    ];
-    $providerOptions['cachePath'] = $this->fileSystem->getTempDirectory() . '/itkdev_openid_connect_drupal-' . $key . '-' . md5($providerOptions['redirectUri']) . '-cache.php';
-
-    if ($options['debug'] ?? FALSE) {
-      $this->debug('Provider options', ['options' => $providerOptions]);
-    }
-
     $request = $this->requestStack->getCurrentRequest();
     $this->setSessionValue(self::SESSION_REQUEST_QUERY, ['query' => $request->query->all()]);
 
-    $provider = new OpenIdConfigurationProvider($providerOptions);
+    $provider = $this->getOpenIdConfigurationProvider($key);
+    $state = $provider->generateState();
+    $nonce = $provider->generateNonce();
 
-    $authorizationUrl = $provider->getAuthorizationUrl();
+    $this->setSessionValue(static::SESSION_STATE, $state);
+    $this->setSessionValue(static::SESSION_NONCE, $nonce);
 
-    $this->setSessionValue(self::SESSION_STATE_NAME, $provider->getState());
+    $authorizationUrl = $provider->getAuthorizationUrl([
+      'state' => $state,
+      'nonce' => $nonce,
+    ]);
+
+    $this->setSessionValue(self::SESSION_STATE, $provider->getState());
 
     return new TrustedRedirectResponse($authorizationUrl);
   }
@@ -184,18 +192,17 @@ class AuthenticationController extends ControllerBase {
       throw new BadRequestHttpException('Missing state or id_token in response');
     }
 
-    $state = $this->getSessionValue(self::SESSION_STATE_NAME);
+    $state = $this->getSessionValue(self::SESSION_STATE);
     if ($state !== $request->query->get('state')) {
       $this->error('Invalid state', ['state' => $request->query->get('state')]);
       throw new BadRequestHttpException('Invalid state');
     }
 
-    // Retrieve id_token and decode it.
-    // @see https://tools.ietf.org/html/rfc7519
-    $idToken = $request->query->get('id_token');
-    [$jose, $payload, $signature] = array_map('base64_decode', explode('.', $idToken));
-    $payload = json_decode($payload, TRUE);
+    $provider = $this->getOpenIdConfigurationProvider($key);
 
+    $payload = (array) $provider->validateIdToken($request->query->get('id_token'), $this->getSessionValue(static::SESSION_NONCE));
+
+    // Authentication successful.
     if ($options['debug'] ?? FALSE) {
       $this->debug('Payload', ['payload' => $payload]);
     }
@@ -224,32 +231,101 @@ class AuthenticationController extends ControllerBase {
   private function diplayError(string $key): array {
     $options = $this->getOptions($key);
     $request = $this->requestStack->getCurrentRequest();
+    $this->error('Error', [
+      'query' => $request->query->all(),
+    ]);
 
-    $this->error('Error', ['query' => $request->query->all()]);
+    return $this->renderError($key, [
+      'message' => $request->query->get('error'),
+      'description' => $request->query->get('error_description'),
+    ]);
+  }
 
-    // @todo use a template for this.
+  /**
+   * Render error.
+   *
+   * @param string $key
+   *   The authenticator key.
+   * @param \Exception $exception
+   *   The exception.
+   *
+   * @return array
+   *   The render array.
+   */
+  private function displayException(string $key, \Exception $exception): array {
+    $request = $this->requestStack->getCurrentRequest();
+
+    $this->error('Exception: ' . $exception->getMessage(), [
+      'query' => $request->query->all(),
+      'exception' => $exception,
+    ]);
+
+    return $this->renderError($key, [
+      'message' => $exception->getMessage(),
+    ]);
+  }
+
+  /**
+   * Render an error message.
+   */
+  private function renderError(string $key, array $error): array {
+    $request = $this->requestStack->getCurrentRequest();
+    $options = $this->getOptions($key);
+
+    $title = $error['message'] ?? $error['error'] ?? $options['name'];
+    $description = $error['description'] ?? NULL;
+
     return [
       'error' => [
-        '#markup' => $options['name'] ?? $request->query->get('error'),
+        '#markup' => $title,
         '#prefix' => '<h1>',
         '#suffix' => '</h1>',
       ],
       'error_description' => [
-        '#markup' => $request->query->get('error_description'),
+        '#markup' => $description,
         '#prefix' => '<pre>',
         '#suffix' => '</pre>',
+        '#access' => NULL !== $description,
       ],
       'authenticate' => [
         '#type' => 'link',
         '#title' => $this->t('Try again'),
         '#url' => Url::fromRoute(
           'itkdev_openid_connect_drupal.openid_connect',
-          [
+          array_filter([
             'key' => $key,
-          ]
+            'location' => $request->query->get('location'),
+          ])
         ),
       ],
     ];
+  }
+
+  /**
+   * Get an OpenIdConfigurationProvider instance.
+   */
+  private function getOpenIdConfigurationProvider(string $key): OpenIdConfigurationProvider {
+    $options = $this->getOptions($key);
+
+    $providerOptions = [
+      'redirectUri' => $this->getUrl(
+        'itkdev_openid_connect_drupal.openid_connect',
+        [
+          'key' => $key,
+        ],
+        ['absolute' => TRUE]
+      ),
+      'openIDConnectMetadataUrl' => $options['openid_connect_discovery_url'],
+      'cacheItemPool' => $this->cacheItemPool,
+      'clientId' => $options['client_id'],
+      'clientSecret' => $options['client_secret'],
+    ];
+
+    if ($options['debug'] ?? FALSE) {
+      $this->debug('Provider options', ['options' => $providerOptions]);
+    }
+
+    return new OpenIdConfigurationProvider($providerOptions);
   }
 
   /**
