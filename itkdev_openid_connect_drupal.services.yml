@@ -1,0 +1,34 @@
+services:
+  itkdev_openid_connect_drupal.config_helper:
+    class: Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper
+    arguments:
+      - '@config.factory'
+
+  itkdev_openid_connect_drupal.user_helper:
+    class: Drupal\itkdev_openid_connect_drupal\Helper\UserHelper
+    arguments:
+      - '@entity_type.manager'
+
+  itkdev_openid_connect_drupal.authorization_manager:
+    class: Drupal\itkdev_openid_connect_drupal\AuthorizationManager
+    arguments:
+      - '@itkdev_openid_connect_drupal.config_helper'
+      - '@externalauth.externalauth'
+      - '@externalauth.authmap'
+      - '@session'
+      - '@logger.channel.itkdev_openid_connect_drupal'
+
+  itkdev_openid_connect_drupal.form_helper:
+    class: Drupal\itkdev_openid_connect_drupal\Helper\FormHelper
+    arguments:
+      - '@itkdev_openid_connect_drupal.authorization_manager'
+
+  itkdev_openid_connect_drupal.cache_item_pool:
+    class: Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool
+    arguments:
+      - '@cache.default'
+
+  logger.channel.itkdev_openid_connect_drupal:
+    parent: logger.channel_base
+    arguments:
+      - 'itkdev_openid_connect_drupal'
