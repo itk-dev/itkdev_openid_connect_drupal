@@ -23,11 +23,6 @@ services:
     arguments:
       - '@itkdev_openid_connect_drupal.authorization_manager'
 
-  itkdev_openid_connect_drupal.cache_item_pool:
-    class: Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool
-    arguments:
-      - '@cache.default'
-
   logger.channel.itkdev_openid_connect_drupal:
     parent: logger.channel_base
     arguments:
