@@ -8,10 +8,10 @@ use Drupal\Core\Routing\LocalRedirectResponse;
 use Drupal\Core\Routing\TrustedRedirectResponse;
 use Drupal\Core\Url;
 use Drupal\itkdev_openid_connect_drupal\AuthorizationManager;
-use Drupal\itkdev_openid_connect_drupal\Cache\CacheItemPool;
 use Drupal\itkdev_openid_connect_drupal\Helper\ConfigHelper;
 use Drupal\itkdev_openid_connect_drupal\Helper\UserHelper;
 use ItkDev\OpenIdConnect\Security\OpenIdConfigurationProvider;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerAwareTrait;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LoggerTrait;
@@ -88,11 +88,10 @@ class AuthenticationController extends ControllerBase {
   /**
    * {@inheritdoc}
    */
-  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, FileSystemInterface $fileSystem, RequestStack $requestStack, CacheItemPool $cacheItemPool, LoggerInterface $logger) {
+  public function __construct(AuthorizationManager $authorizationManager, ConfigHelper $configHelper, UserHelper $userHelper, RequestStack $requestStack, CacheItemPoolInterface $cacheItemPool, LoggerInterface $logger) {
     $this->authorizationManager = $authorizationManager;
     $this->configHelper = $configHelper;
     $this->userHelper = $userHelper;
-    $this->fileSystem = $fileSystem;
     $this->requestStack = $requestStack;
     $this->cacheItemPool = $cacheItemPool;
     $this->setLogger($logger);
@@ -106,9 +105,8 @@ class AuthenticationController extends ControllerBase {
       $container->get('itkdev_openid_connect_drupal.authorization_manager'),
       $container->get('itkdev_openid_connect_drupal.config_helper'),
       $container->get('itkdev_openid_connect_drupal.user_helper'),
-      $container->get('file_system'),
       $container->get('request_stack'),
-      $container->get('itkdev_openid_connect_drupal.cache_item_pool'),
+      $container->get('drupal_psr6_cache.cache_item_pool'),
       $container->get('logger.channel.itkdev_openid_connect_drupal')
     );
   }
